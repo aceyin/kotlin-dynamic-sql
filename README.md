@@ -38,7 +38,7 @@ sql {
         select $common_cols from `user`
         where 1=1
         ${+"and email=:email" If NotNull("email")}
-        and status = :status
+        and status = 1
         """
     }
 }
