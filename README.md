@@ -44,7 +44,7 @@ sql {
 }
 ```
 
-then we can use ```sql.build("sql-name",sqlParameterMap)``` to build SQLs dynamically, the program will create a SQL according to the incoming parameters.
+then we can use ```sql.build("sql-name",sqlParameterMap)``` to build SQLs dynamically, the program will create a SQL according to the given parameters.
 
 for example:
 
