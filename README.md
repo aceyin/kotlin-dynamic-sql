@@ -67,3 +67,6 @@ the project use kotlin scripting language (.kts file) as the SQL configuration f
 when project starting, a ```SqlScriptLoader``` will loading all ".kts" file, and then use ```ScriptEngineManager``` to parse and evaluate them one by one.
 
 during evaluating the ```.kts``` file, the SQLs will be translated into ```Spring EL``` template, and when we call ```sql.build``` method, the program will use ```spring-el``` parser to parse the SQL template into target SQL text.
+
+## license 
+Apache 2.0
