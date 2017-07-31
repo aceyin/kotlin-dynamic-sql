@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
@@ -60,11 +60,6 @@
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j</artifactId>
-            <version>${log4j.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
             <version>${log4j.version}</version>
         </dependency>
@@ -78,36 +73,45 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
+            <version>4.12</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-test-junit</artifactId>
+            <version>${kotlin.version}</version>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.openjdk.jmh</groupId>
-            <artifactId>jmh-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.openjdk.jmh</groupId>
-            <artifactId>jmh-core-benchmarks</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.openjdk.jmh</groupId>
-            <artifactId>jmh-generator-annprocess</artifactId>
-            <scope>test</scope>
-        </dependency>
+        <!--<dependency>-->
+        <!--<groupId>org.openjdk.jmh</groupId>-->
+        <!--<artifactId>jmh-core</artifactId>-->
+        <!--<scope>test</scope>-->
+        <!--</dependency>-->
+        <!--<dependency>-->
+        <!--<groupId>org.openjdk.jmh</groupId>-->
+        <!--<artifactId>jmh-core-benchmarks</artifactId>-->
+        <!--<scope>test</scope>-->
+        <!--</dependency>-->
+        <!--<dependency>-->
+        <!--<groupId>org.openjdk.jmh</groupId>-->
+        <!--<artifactId>jmh-generator-annprocess</artifactId>-->
+        <!--<scope>test</scope>-->
+        <!--</dependency>-->
     </dependencies>
+
+    <scm>
+        <url>https://github.com/aceyin/kotlin-dynamic-sql.git</url>
+        <connection>scm:git:https://1github.com/aceyin/kotlin-dynamic-sql.git</connection>
+        <developerConnection>scm:git:https://1github.com/aceyin</developerConnection>
+        <tag>HEAD</tag>
+    </scm>
 
     <build>
         <!-- make maven-source-plugin work -->
         <sourceDirectory>${kotlin.src.dir}</sourceDirectory>
         <testSourceDirectory>${kotlin.test.dir}</testSourceDirectory>
 
-        <finalName>${groupId}-${artifactId}</finalName>
+        <finalName>${project.groupId}-${project.artifactId}</finalName>
 
         <plugins>
             <plugin>

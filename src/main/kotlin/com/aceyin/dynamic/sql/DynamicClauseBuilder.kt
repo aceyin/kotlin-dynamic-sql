@@ -88,10 +88,6 @@ class WhenClause(inheritConditions: LinkedList<WhenCondition>) : ChooseClause() 
         this.conditions = inheritConditions
     }
 
-    override infix fun When(condition: ConditionExpression): WhenClause {
-        throw IllegalAccessException("Should not call `when` function here")
-    }
-
     infix fun then(clause: () -> String): ThenClause {
         this.currentCondition.text = clause()
         this.conditions.add(this.currentCondition)

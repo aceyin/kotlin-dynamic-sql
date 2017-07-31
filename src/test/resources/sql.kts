@@ -2,7 +2,6 @@ import com.aceyin.dynamic.sql.SqlScriptBuilder.False
 import com.aceyin.dynamic.sql.SqlScriptBuilder.Null
 import com.aceyin.dynamic.sql.SqlScriptBuilder.True
 import com.aceyin.dynamic.sql.SqlScriptBuilder.has
-import com.aceyin.dynamic.sql.invoke
 import com.aceyin.dynamic.sql.choose
 import com.aceyin.dynamic.sql.invoke
 import com.aceyin.dynamic.sql.sql

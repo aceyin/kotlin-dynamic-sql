@@ -1,6 +1,5 @@
 package com.aceyin.dynamic.sql
 
-import org.jetbrains.kotlin.codegen.context.ScriptContext
 import org.slf4j.LoggerFactory
 import java.io.Reader
 import javax.script.ScriptContext

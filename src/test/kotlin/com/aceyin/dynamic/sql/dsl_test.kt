@@ -1,7 +1,11 @@
-package kotdata.sql
+package com.aceyin.dynamic.sql
 
-import com.aceyin.dynamic.sql.SqlScriptLoader
-import com.aceyin.dynamic.sql.sql
+import org.junit.Assert.assertEquals
+import org.junit.Test
+import org.springframework.expression.common.TemplateParserContext
+import org.springframework.expression.spel.standard.SpelExpressionParser
+import org.springframework.expression.spel.support.StandardEvaluationContext
+import java.io.File
 
 /**
  * Created by ace on 2017/7/26.
@@ -9,7 +13,7 @@ import com.aceyin.dynamic.sql.sql
 class dsl_test {
 
     init {
-        val file = File("/Users/ace/Documents/workspace/UN32/tech_base/kotun/kotdata/kotdata-jdbc/src/test/kotlin/kotdata/sql/sql.kts")
+        val file = File(dsl_test::class.java.getResource("/sql.kts").file)
         SqlScriptLoader.loadKotlinSqlScript(file.reader())
     }
 
