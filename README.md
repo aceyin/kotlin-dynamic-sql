@@ -6,7 +6,7 @@ This project include a simple util class for generate dynamic SQLs for kotlin de
 
 For example:
 
-```
+```kotlin
 // this is the shared SQL clause
 val shared_order_commons =
 """
@@ -35,14 +35,14 @@ ORDER BY o.create_time DESC
 
 Call the dynamic SQL by pass a parameter map to it:
 
-```
+```kotlin
 val params = mapOf("startTime" to "2017-12-13", "status" to "CLOSED", "searchKey" to "ABC123")
 val sql = get_order_list(params)
 ```
 
 The generated SQL will like this:
 
-```
+```sql
 SELECT
     o.id                             AS id,
     o.source_id                      AS sourceId,
@@ -58,7 +58,7 @@ ORDER BY o.create_time DESC
 More complex parameter check syntax example:
 
 -  Check if parameter value is null 
-```
+```kotlin
 val sql_param_check_condition = sql {
 """
 SELECT *
@@ -71,7 +71,7 @@ ${+"AND dd=:dd" If "dd" of it Is NULL Else "AND dd!=:dd"}
 """
 ```
 -  Compare parameter values
-```
+```kotlin
 val sql_param_error = sql {
 """
 SELECT *
