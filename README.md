@@ -55,5 +55,42 @@ AND o.order_number = :orderNumber
 ORDER BY o.create_time DESC
 ```
 
+More complex parameter check syntax example:
+
+-  Check if parameter value is null 
+```
+val sql_param_check_condition = sql {
+"""
+SELECT *
+FROM
+WHERE 1=1
+${+"AND aa=:aa" If it contains one of arrayOf("aa")}
+${+"AND bb=:bb" If it contains "bb" Else "AND bb!=:bb"}
+${+"AND cc=:cc" If "cc" of it Is NOT_NULL}
+${+"AND dd=:dd" If "dd" of it Is NULL Else "AND dd!=:dd"}
+"""
+```
+-  Compare parameter values
+```
+val sql_param_error = sql {
+"""
+SELECT *
+FROM
+WHERE 1=1
+${+"AND aa=:aa" If "aa" of it eq "aa"}
+${+"AND bb=:bb" If "bb" of it gt 10}
+${+"AND cc=:cc" If "cc" of it ge 10}
+${+"AND dd=:dd" If "dd" of it lt 10}
+${+"AND ee=:ee" If "ee" of it le 10}
+${+"AND ff=:ff" If "ff" of it le 10 Else "AND ff!=:ff"}
+${+"AND gg=:gg" If "gg" of it inn arrayOf(10, 20, 30) Else "AND gg!=:gg"}
+${+"AND hh=:hh" If "hh" of it inn listOf("30", "40", "50") Else "AND hh!=:hh"}
+${+"AND ii=:ii" If "ii" of it inn mapOf("30" to 30, "40" to 40, "50" to 50) Else "AND ii!=:ii"}
+${+"AND jj=:jj" If "jj" of it nin arrayOf(10, 20, 30) Else "AND jj!=:jj"}
+${+"AND kk=:kk" If "kk" of it nin arrayOf(10, 20, 30) Else "AND kk!=:kk"}
+"""
+}
+```
+
 ## license 
 Apache 2.0
