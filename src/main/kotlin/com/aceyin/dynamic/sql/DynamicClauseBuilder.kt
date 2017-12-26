@@ -1,306 +1,474 @@
 package com.aceyin.dynamic.sql
 
-import java.util.*
+import net.sf.cglib.beans.BeanMap
+import org.slf4j.LoggerFactory
+
 
 /**
- * Created by ace on 2017/7/28.
+ * Overloaded String unary + function to create a ConditionSelector instance.
  */
-
-/**
- * 动态语句封装类，即根据参数值的技术算规则生成的语句。
- */
-sealed class DynamicClause {
-
+operator fun String.unaryPlus(): ConditionSelector {
+    return ConditionSelector(this)
 }
 
-sealed class IfElseClause : DynamicClause() {
+class ConditionSelector(
+        /** Conditional expressions are satisfied when appending statements in SQL */
+        private val clause: String) {
 
     /**
-     * 动态SQL语句的条件部分
+     * Simple If statement, if the bool value within the argument is true, append the sql clause in the statement
      */
-    var condition = ConditionExpression(ConditionType.DUMMY, "")
-    var ifClause: String = ""
-    var elseClause: String = ""
+    infix fun If(bool: Boolean) = SimpleBooleanCondition(bool, clause)
 
+    infix fun If(body: () -> Boolean) = SimpleBooleanCondition(body(), clause)
 
     /**
-     * 将 DynamicClause 替换成 Spring EL表达式的风格
+     * Whether the parameter list contains the given parameters, sql check the parameters, if the conditions are appended to the given sql clause
+     */
+    infix fun If(param: Map<String, Any?>) = ParamContainsCondition(param, clause)
+
+    /**
+     * Parameter value check
+     */
+    infix fun If(paramName: String) = ParamValueCheckCondition(paramName, clause)
+}
+
+
+sealed class Condition(val paramList: Map<String, Any?>, val clause: String)
+
+
+/**
+ * Simple bool expression conditions.
+ */
+class SimpleBooleanCondition(val bool: Boolean, clause: String) : Condition(emptyMap(), clause) {
+
+    infix fun Else(elseClause: String): String = if (this.bool) " $clause " else " $elseClause "
+
+    override fun toString(): String = if (this.bool) " $clause " else ""
+}
+
+/**
+ * Check whether the parameter list contains a parameter
+ */
+class ParamContainsCondition(param: Map<String, Any?>, clause: String) : Condition(param, clause) {
+    private val logger = LoggerFactory.getLogger(ParamContainsCondition::class.java)
+    /**
+     * Check whether the parameter list contains a parameter
+     */
+    infix fun contains(paramName: String) = SimpleContainsCondition(paramName, paramList, clause)
+
+    infix fun contains(howMany: HowMany) = ComplexContainsConditionStarter(paramList, clause, howMany)
+
+    /**
+     * If the statement in SQL is not finished, no clause is appended, and an error log is printed
      */
     override fun toString(): String {
-        // 条件语句的 条件类型
-        val type = this.condition.type
-        // 如果该条件子句没有条件，则直接返回 sql 子句
-        if (type == ConditionType.DUMMY) {
-            return this.ifClause
+        logger.error("Incomplete SQL statement clause：clause=$clause, Program call stack:")
+        val stacktrace = Thread.currentThread().stackTrace
+        val msg = StringBuilder()
+        stacktrace.forEach {
+            msg.appendln("\t\t: ${it.className}:${it.methodName}, Line: ${it.lineNumber}")
         }
-        return this.condition.build(ifClause, elseClause)
+        logger.error(msg.toString())
+        return ""
     }
 }
 
-sealed class ChooseClause : DynamicClause() {
-    protected lateinit var conditions: LinkedList<WhenCondition>
+enum class HowMany {
+    one, all
+}
 
-    open infix fun When(condition: ConditionExpression): WhenClause {
-        val clause = WhenClause(LinkedList<WhenCondition>())
-        clause.currentCondition = WhenCondition(condition)
-        return clause
-    }
+/**
+ * Parameter Check Expression Conditions
+ */
+class ParamValueCheckCondition(val paramName: String, clause: String) : Condition(emptyMap(), clause) {
+    private val logger = LoggerFactory.getLogger(ParamValueCheckCondition::class.java)
 
+    /**
+     *  Check the list of parameters, the value of a parameter meets the expected conditions
+     */
+    infix fun of(paramList: Map<String, Any?>): ParamCheckerStarter = ParamCheckerStarter(paramName, paramList, clause)
+
+    /**
+     * If the statement in SQL is not finished, no clause is appended, and an error log is printed
+     */
     override fun toString(): String {
-        if (this.conditions.size == 0) return ""
-
-
-        val sb = StringBuilder()
-        val allConditions = mutableListOf<String>()
-
-        var whenCondition = this.conditions.poll()
-        do {
-            val conditionExpression = whenCondition.condition
-            val springEl = conditionExpression.build(
-                    trueClause = whenCondition.text,
-                    falseClause = "",
-                    outerEdge = true)
-            sb.appendln(springEl)
-            allConditions.add(conditionExpression.conditionText)
-
-            whenCondition = this.conditions.poll()
-        } while (whenCondition != null)
-
-        val elseText = when (this) {
-            is EndClause -> {
-                val x = Array(allConditions.size) {
-                    "!(${allConditions[it]})"
-                }.joinToString(separator = " and ")
-                "#{($x) == true ? '${this.elseClause}':''}"
-            }
-            else -> ""
+        logger.error("Incomplete SQL statement clause：clause=$clause, Program call stack:")
+        val stacktrace = Thread.currentThread().stackTrace
+        val msg = StringBuilder()
+        stacktrace.forEach {
+            msg.appendln("\t\t: ${it.className}:${it.methodName}, Line: ${it.lineNumber}")
         }
-        sb.appendln(elseText)
-
-        return sb.toString()
+        logger.error(msg.toString())
+        return ""
     }
 }
 
-class WhenClause(inheritConditions: LinkedList<WhenCondition>) : ChooseClause() {
-    internal lateinit var currentCondition: WhenCondition
-
-    init {
-        this.conditions = inheritConditions
-    }
-
-    infix fun then(clause: () -> String): ThenClause {
-        this.currentCondition.text = clause()
-        this.conditions.add(this.currentCondition)
-        return ThenClause(this.conditions)
-    }
+class SimpleContainsCondition(val paramName: String, paramList: Map<String, Any?>, clause: String) : Condition(paramList, clause) {
+    infix fun Else(elseClause: String): String = if (paramList.containsKey(paramName)) " $clause " else " $elseClause "
+    /**
+     * If the statement in SQL, there is no Else part that the else part does not append any statement
+     */
+    override fun toString(): String = if (paramList.containsKey(paramName)) " $clause " else ""
 }
 
-class ThenClause(inheritConditions: LinkedList<WhenCondition>) : ChooseClause() {
-    init {
-        this.conditions = inheritConditions
-    }
 
-    override infix fun When(condition: ConditionExpression): WhenClause {
-        val clause = WhenClause(this.conditions)
-        clause.currentCondition = WhenCondition(condition)
-        return clause
-    }
+class ComplexContainsConditionStarter(paramList: Map<String, Any?>, clause: String, val howMany: HowMany) : Condition(paramList, clause) {
+    private val logger = LoggerFactory.getLogger(ComplexContainsConditionStarter::class.java)
 
-    infix fun Else(clause: String): EndClause {
-        return EndClause(clause, this.conditions)
-    }
-}
-
-class EndClause(val elseClause: String, inheritConditions: LinkedList<WhenCondition>) : ChooseClause() {
-    init {
-        this.conditions = inheritConditions
-    }
-}
-
-class IfClause(ifClause: String) : IfElseClause() {
-    init {
-        this.ifClause = ifClause
+    infix fun of(paramNames: Array<String>): ComplexContainsConditionEnder {
+        val sets = HashSet<String>()
+        paramNames.forEach { sets.add(it) }
+        return ComplexContainsConditionEnder(paramList, clause, howMany, sets)
     }
 
     /**
-     * 动态语句的 条件部分的 承接函数，用来接收动态语句中的 条件判断部分。
+     * If the statement in SQL, there is no Else part that the else part does not append any statement
      */
-    infix fun If(condition: ConditionExpression): ElseClause {
-        this.condition = condition
-        return ElseClause(this)
+    override fun toString(): String {
+        logger.error("Incomplete SQL statement clause：clause=$clause, Program call stack:")
+        val stacktrace = Thread.currentThread().stackTrace
+        val msg = StringBuilder()
+        stacktrace.forEach {
+            msg.appendln("\t\t: ${it.className}:${it.methodName}, Line: ${it.lineNumber}")
+        }
+        logger.error(msg.toString())
+        return ""
     }
 }
 
-class ElseClause(parent: IfElseClause) : IfElseClause() {
-    init {
-        this.ifClause = parent.ifClause
-        this.elseClause = parent.elseClause
-        this.condition = parent.condition
+class ComplexContainsConditionEnder(paramList: Map<String, Any?>, clause: String, val howMany: HowMany, val paramNames: Set<String>) : Condition(paramList, clause) {
+    private var elseClause: String = ""
+    /**
+     * If there is no Else part, the sql clause of the previous part is output directly
+     */
+    override fun toString(): String {
+        return buildClause()
     }
 
     /**
-     * 动态语句的 条件部分的 承接函数，用来接收动态语句中的 条件判断部分。
+     * If the parameters are not satisfied, add another specified sql clause
      */
-    infix fun Else(clause: String): IfElseClause {
-        this.elseClause = clause
-        return this
+    infix fun Else(elseClause: String): String {
+        this.elseClause = elseClause
+        return buildClause()
+    }
+
+    private fun buildClause(): String {
+        var contains = false
+        when (howMany) {
+            HowMany.one -> {
+                paramNames.forEach {
+                    if (paramList.containsKey(it)) contains = true
+                }
+            }
+            HowMany.all -> contains = paramList.keys.containsAll(paramNames)
+        }
+        return if (contains) " $clause " else " $elseClause "
     }
 }
-
 
 /**
- * 动态SQL语句的条件表达式的封装类。
+ * Parameter checker
  */
-data class ConditionExpression(
-        /**
-         * 条件的类型
-         */
-        val type: ConditionType,
-        /**
-         * 条件表达式的文本
-         */
-        val text: Any) {
+class ParamCheckerStarter(private val paramName: String,
+                          private val paramList: Map<String, Any?>,
+                          private val clause: String) {
+    private val logger = LoggerFactory.getLogger(ParamCheckerStarter::class.java)
 
-    internal var conditionText = ""
-        get
-
-    companion object CONST {
-        /**
-         * 动态语句中 参数引用部分的 正则模式
-         * 在动态语句(例如 True 判断语句) 中，如果需要引用传入的参数的值，采用 @参数名 的方式即可
-         * 在构建动态语句的时候，@参数名 会被替换成 Spring EL所需的格式。
-         * 如：
-         * @username 最终会被替换成 #param['username']
-         */
-        val PARAM_PATTERN = "@(\\w+)".toRegex()
+    /**
+     * If the SQL statement is not finished, do not append any clause
+     */
+    override fun toString(): String {
+        logger.error("Incomplete SQL statement clause：clause=$clause, Program call stack:")
+        val stacktrace = Thread.currentThread().stackTrace
+        val msg = StringBuilder()
+        stacktrace.forEach {
+            msg.appendln("\t\t: ${it.className}:${it.methodName}, Line: ${it.lineNumber}")
+        }
+        logger.error(msg.toString())
+        return ""
     }
 
+    /**
+     * Check the parameters are empty or non-empty, empty array / list / map
+     */
+    infix fun Is(status: NullOrEmpty) = NullOrEmptyParamChecker(paramName, status, paramList, clause)
 
-    fun build(trueClause: String,
-              falseClause: String,
-              outerEdge: Boolean = true,
-              trueClauseQuoted: Boolean = true,
-              falseClauseQuoted: Boolean = true
-    ): String {
+    /**
+     * Determine whether the parameter value is equal to the given value
+     */
+    infix fun eq(givenValue: Any?) = ParamValueCompareChecker(paramName, ValueComparator.EQ, givenValue, paramList, clause)
 
-        val tc = if (trueClauseQuoted) "'$trueClause'" else trueClause
-        val fc = if (falseClauseQuoted) "'$falseClause'" else falseClause
+    /**
+     * Check whether the parameter value is greater than the given value
+     */
+    infix fun gt(givenValue: Any?) = ParamValueCompareChecker(paramName, ValueComparator.GT, givenValue, paramList, clause)
 
-        val result = when (type) {
-        // 转换 has 类型的条件判断 为 spring el 表达式
-            ConditionType.HAS_PARAM -> {
-                when (text) {
-                    is String -> {
-                        this.conditionText = "#p.containsKey('$text')"
-                        "#p.containsKey('$text') ? $tc:$fc"
-                    }
-                    is Array<*> -> {
-                        val conds = Array(text.size) {
-                            "#p.containsKey('${text[it]}')"
-                        }.joinToString(separator = " and ")
-                        this.conditionText = conds
-                        "$conds ? $tc:$fc"
-                    }
-                    else -> ""
-                }
-            }
-        // hasno
-            ConditionType.HAS_NO_PARAM -> {
-                when (text) {
-                    is String -> {
-                        this.conditionText = "#p.containsKey('$text') == false"
-                        "#p.containsKey('$text') == false ? $tc:$fc"
-                    }
-                    is Array<*> -> {
-                        val conds = Array(text.size) {
-                            "#p.containsKey('${text[it]}') == false"
-                        }.joinToString(separator = " and ")
-                        this.conditionText = conds
-                        "$conds ? $tc:$fc"
-                    }
-                    else -> ""
-                }
-            }
-        // is null
-            ConditionType.IS_NULL -> {
-                when (text) {
-                    is String -> {
-                        this.conditionText = "#p['$text'] == null"
-                        "#p['$text'] == null ? $tc:$fc"
-                    }
-                    is Array<*> -> {
-                        val conds = Array(text.size) {
-                            "#p['${text[it]}'] == null"
-                        }.joinToString(separator = " and ")
-                        this.conditionText = conds
-                        "$conds ? $tc:$fc"
-                    }
-                    else -> ""
-                }
-            }
-        // is not null
-            ConditionType.IS_NOT_NULL -> {
-                when (text) {
-                    is String -> {
-                        this.conditionText = "#p['$text'] != null"
-                        "#p['$text'] != null ? $tc:$fc"
-                    }
-                    is Array<*> -> {
-                        val conds = Array(text.size) {
-                            "#p['${text[it]}'] != null"
-                        }.joinToString(separator = " and ")
-                        this.conditionText = conds
-                        "$conds ? $tc:$fc"
-                    }
-                    else -> ""
-                }
-            }
-        // 转换 is true 类型的条件判断为 spring el 表达式
-            ConditionType.IS_TRUE -> {
-                if (text.toString().startsWith("@")) {
-                    val con = text.toString().replace(PARAM_PATTERN, "#p['\$1']")
-                    this.conditionText = "($con) == true"
-                    "($con) == true ? $tc:$fc"
-                } else ""
-            }
-        // 转换 is false 类型的条件判断为 spring el 表达式
-            ConditionType.IS_FALSE -> {
-                if (text.toString().startsWith("@")) {
-                    val con = text.toString().replace(PARAM_PATTERN, "#p['\$1']")
-                    this.conditionText = "($con) == false"
-                    "($con) == false ? $tc:$fc"
-                } else ""
-            }
-            else -> ""
-        }
+    /**
+     * Determine whether the parameter value is greater than or equal to the given value
+     */
+    infix fun ge(givenValue: Any?) = ParamValueCompareChecker(paramName, ValueComparator.GE, givenValue, paramList, clause)
 
-        return if (result.trim().isNullOrBlank()) "" else {
-            if (outerEdge) "#{$result}"
-            else result
-        }
-    }
+    /**
+     * Determine whether the parameter value is less than the given value
+     */
+    infix fun lt(givenValue: Any?) = ParamValueCompareChecker(paramName, ValueComparator.LT, givenValue, paramList, clause)
+
+    /**
+     * Determine whether the parameter value is less than or equal to the given value
+     */
+    infix fun le(givenValue: Any?) = ParamValueCompareChecker(paramName, ValueComparator.LE, givenValue, paramList, clause)
+
+    /**
+     * Determine if the parameter is in the given list
+     */
+    infix fun inn(givenValues: Collection<out Any>) = ParamValueCompareChecker(paramName, ValueComparator.IN, givenValues, paramList, clause)
+
+    /**
+     * Determine if the parameter is in the given Map
+     */
+    infix fun inn(givenValues: Map<out Any, out Any>) = ParamValueCompareChecker(paramName, ValueComparator.IN, givenValues, paramList, clause)
+
+    /**
+     * Determine if the argument is in the given array
+     */
+    infix fun inn(givenValues: Array<out Any>) = ParamValueCompareChecker(paramName, ValueComparator.IN, givenValues, paramList, clause)
+
+
+    /**
+     * Determine if the parameter is in the given list
+     */
+    infix fun nin(givenValues: Collection<out Any>) = ParamValueCompareChecker(paramName, ValueComparator.NIN, givenValues, paramList, clause)
+
+    /**
+     * Determine if the parameter is in the given Map
+     */
+    infix fun nin(givenValues: Map<out Any, out Any>) = ParamValueCompareChecker(paramName, ValueComparator.NIN, givenValues, paramList, clause)
+
+    /**
+     * Determine if the argument is in the given array
+     */
+    infix fun nin(givenValues: Array<out Any>) = ParamValueCompareChecker(paramName, ValueComparator.NIN, givenValues, paramList, clause)
 }
-
-data class WhenCondition(
-        val condition: ConditionExpression,
-        var text: String = ""
-)
 
 /**
- * 条件表达式的类型
+ * Null or empty (empty array,list or map) value checker.
  */
-enum class ConditionType {
-    DUMMY,
-    // 判断 指定的参数是否存在且不为空 的表达式
-    HAS_PARAM,
-    // 判断 参数列表中不包含某些参数
-    HAS_NO_PARAM,
-    // 判断 指定的表达式结果是否为true 的表达式
-    IS_TRUE,
-    // 判断 指定的表达式结果是否为 false 的表达式
-    IS_FALSE,
-    // 判断 指定的表达式结果为 null 的表达式
-    IS_NULL,
-    // 判断 指定的表达式结果不为 null 的表达式
-    IS_NOT_NULL
+class NullOrEmptyParamChecker(private val paramName: String,
+                              private val status: NullOrEmpty,
+                              private val paramList: Map<String, Any?>,
+                              private val clause: String) {
+    private var elseClause: String = ""
+    /**
+     * Override toString method so that if there is no 'Else' part, the checker can return an empty ""
+     */
+    override fun toString(): String {
+        return buildClause()
+    }
+
+    /**
+     * Else part of parameter value comparator.
+     */
+    infix fun Else(elseClause: String): String {
+        this.elseClause = elseClause
+        return buildClause()
+    }
+
+    private fun buildClause(): String {
+        val paramValue = paramList[paramName]
+        return when (status) {
+            NullOrEmpty.NULL -> {
+                if (paramValue == null) " $clause " else {
+                    when (paramValue) {
+                    // empty string will be treated as null
+                        is CharSequence -> if (paramValue.isNullOrBlank()) " $clause " else " $elseClause "
+                        else -> " $elseClause "
+                    }
+                }
+            }
+            NullOrEmpty.NOT_NULL -> {
+                if (paramValue != null) {
+                    when (paramValue) {
+                    // empty string will be treated as null
+                        is CharSequence -> if (paramValue.isNullOrBlank()) " $elseClause " else " $clause "
+                        else -> " $clause "
+                    }
+                } else " $elseClause "
+            }
+            NullOrEmpty.EMPTY -> {
+                when (paramValue) {
+                    is Collection<*> -> if (paramValue.size == 0) " $clause " else " $elseClause "
+                    is Map<*, *> -> if (paramValue.isEmpty()) " $clause " else " $elseClause "
+                    is Array<*> -> if (paramValue.size == 0) " $clause " else " $elseClause "
+                    else -> ""
+                }
+            }
+            NullOrEmpty.NOT_EMPTY -> {
+                when (paramValue) {
+                    is Collection<*> -> if (paramValue.size == 0) " $elseClause " else " $clause "
+                    is Map<*, *> -> if (paramValue.isEmpty()) " $elseClause " else " $clause "
+                    is Array<*> -> if (paramValue.size == 0) " $elseClause " else " $clause "
+                    else -> ""
+                }
+            }
+        }
+    }
 }
+
+/**
+ * Parameter value comparator.
+ *
+ */
+class ParamValueCompareChecker(private val paramName: String,
+                               private val comparator: ValueComparator,
+                               private val givenValue: Any?,
+                               private val paramList: Map<String, Any?>,
+                               private val clause: String) {
+
+    /**
+     * Override toString method so that if there is no 'Else' part, the checker can return an empty ""
+     */
+    override fun toString(): String {
+        // 如果参数列表里面取出来的值为空，则直接
+        val paramValue = paramList[paramName]
+        val matches = comparator.compare(paramValue!!, givenValue)
+        return if (matches) " $clause " else ""
+    }
+
+    /**
+     * Else part of parameter value comparator.
+     */
+    infix fun Else(elseClause: String): String {
+        val paramValue = paramList[paramName]
+        val matches = comparator.compare(paramValue!!, givenValue)
+        return if (matches) " $clause " else " $elseClause "
+    }
+}
+
+/**
+ * Parameter value comparator, for check the parameter value.
+ */
+enum class ValueComparator(val compare: (paramValue: Any?, givenValue: Any?) -> Boolean) {
+    // equals to  given value
+    EQ({ paramValue, givenValue -> paramValue == givenValue }),
+    // not equals to  given value
+    NEQ({ paramValue, givenValue -> paramValue != givenValue }),
+    // greater  given value
+    GT({ paramValue, givenValue ->
+        if (paramValue == null && givenValue == null) false
+        else if (paramValue == null) false
+        else if (givenValue == null) true
+        else {
+            if (paramValue::class != givenValue::class) false
+            else if (paramValue is Comparable<*> && givenValue is Comparable<*>) {
+                (paramValue as kotlin.Comparable<Any>) > (givenValue as kotlin.Comparable<Any>)
+            } else false
+        }
+    }),
+    // greater or equals to  given value
+    GE({ paramValue, givenValue ->
+        if (paramValue == null && givenValue == null) true
+        else if (paramValue == null) false
+        else if (givenValue == null) true
+        else {
+            if (paramValue::class != givenValue::class) false
+            else if (paramValue is kotlin.Comparable<*> && givenValue is kotlin.Comparable<*>) {
+                (paramValue as kotlin.Comparable<kotlin.Any>) >= (givenValue as kotlin.Comparable<kotlin.Any>)
+            } else false
+        }
+    }),
+    // less than given value
+    LT({ paramValue, givenValue ->
+        if (paramValue == null && givenValue == null) false
+        else if (paramValue == null) true
+        else if (givenValue == null) false
+        else {
+            if (paramValue::class != givenValue::class) false
+            else if (paramValue is kotlin.Comparable<*> && givenValue is kotlin.Comparable<*>) {
+                (paramValue as kotlin.Comparable<kotlin.Any>) < (givenValue as kotlin.Comparable<kotlin.Any>)
+            } else false
+        }
+    }),
+    // less or equals than given value
+    LE({ paramValue, givenValue ->
+        if (paramValue == null && givenValue == null) true
+        else if (paramValue == null) true
+        else if (givenValue == null) false
+        else {
+            if (paramValue::class != givenValue::class) false
+            else if (paramValue is kotlin.Comparable<*> && givenValue is kotlin.Comparable<*>) {
+                (paramValue as kotlin.Comparable<kotlin.Any>) <= (givenValue as kotlin.Comparable<kotlin.Any>)
+            } else false
+        }
+    }),
+    // parameter value is in list/array/map
+    IN({ paramValue, givenValue ->
+        if (paramValue == null && givenValue == null) false
+        else if (paramValue == null) false
+        else if (givenValue == null) false
+        else {
+            when (givenValue) {
+                is Collection<*> -> givenValue.contains(paramValue)
+                is Map<*, *> -> givenValue.containsValue(paramValue)
+                is Array<*> -> givenValue.contains(paramValue)
+                else -> false
+            }
+        }
+    }),
+    // parameter value not in list/array/map
+    NIN({ paramValue, givenValue ->
+        if (paramValue == null && givenValue == null) false
+        else if (paramValue == null) false
+        else if (givenValue == null) false
+        else {
+            when (givenValue) {
+                is Collection<*> -> !givenValue.contains(paramValue)
+                is Map<*, *> -> !givenValue.containsValue(paramValue)
+                is Array<*> -> !givenValue.contains(paramValue)
+                else -> false
+            }
+        }
+    })
+    ;
+}
+
+enum class NullOrEmpty {
+    /** check if a parameter is null */
+    NULL,
+    /** check if a parameter is NOT null */
+    NOT_NULL,
+    /** check if a parameter is an empty list/array/map */
+    EMPTY,
+    /** check if a parameter is NOT an empty list/array/map */
+    NOT_EMPTY
+}
+
+
+class ConditionalSqlBuilder(val body: (param: Map<String, Any?>) -> String) {
+    operator fun invoke(param: Any? = null): String {
+        return if (param == null) body(emptyMap())
+        else {
+            when (param) {
+                is Map<*, *> -> body(param as Map<String, Any?>)
+                else -> {
+                    body(Beans.map(param))
+                }
+            }
+        }
+    }
+}
+
+object Beans {
+    /**
+     * Convert a bean to Map
+     * @param bean Any, the bean to be converted.
+     * @return Map<String,Any>, a map which key is the bean's member name and the value is the bean's member value.
+     */
+    fun map(bean: Any): Map<String, Any?> {
+        return BeanMap.create(bean) as Map<String, Any?>
+    }
+}
+
+fun sql(body: (param: Map<String, Any?>) -> String) = ConditionalSqlBuilder(body)
+
