@@ -2,71 +2,58 @@
 
 ## about the project
 
-This project is targeting to building dynamic sqls using kotlin scripting language, just like Mybatis XML configuration did.
+This project include a simple util class for generate dynamic SQLs for kotlin developers.
 
-for example, bellow is a SQL configuration file: user-sql.kts
+For example:
 
 ```
-sql {
-    val common_cols = "id,name,nick_name,email,avatar,age,status,gender"
-    
-    "user login" {
-        """
-        select $common_cols from `user` where username = :username and password = :password
-        """
-    }
-    
-    // use "choose-when-else" syntax to build dynamic sql
-    "find user by conditions" {
-        """
-        select $common_cols from `user`
-        where 1=1 
-        ${+choose When has("nick_name") then {
-            "and nick_name like :nickName"
-        } When has("gender") then {
-            "and gender = :gender"
-        } When True("@age>0 and @age<120") then {
-            "and age = :age"
-        }}
-        and status = 1
-        """
-    }
-    
-    // use "if-else" syntax to build dynamic sql
-    "find user by email" {
-        """
-        select $common_cols from `user`
-        where 1=1
-        ${+"and email=:email" If NotNull("email")}
-        and status = 1
-        """
-    }
+// this is the shared SQL clause
+val shared_order_commons =
+"""
+SELECT
+    o.id                             AS id,
+    o.source_id                      AS sourceId,
+    o.batch_number                   AS batchNumber,
+FROM `order` o
+WHERE 1 = 1
+"""
+
+// define a dynamic SQL by include the shared SQL clause 
+// and dynamic clause generated when the parameters matched the given conditions
+val get_order_list = sql {
+"""
+$shared_order_commons
+AND o.buyer_id = :userId
+${+"AND o.for_test = :forTest" If it.containsKey("forTest")}
+${+"AND o.create_time BETWEEN :startTime AND :endTime" If (it.containsKey("startTime") && it.containsKey("endTime") && !it.containsKey("searchKey"))}
+${+"AND o.status = :status" If (it.containsKey("status"))}
+${+"AND o.order_number = :orderNumber" If (it.containsKey("searchKey"))}
+ORDER BY o.create_time DESC
+"""
 }
 ```
 
-then we can use ```sql.build("sql-name",sqlParameterMap)``` to build SQLs dynamically, the program will create a SQL according to the given parameters.
-
-for example:
+Call the dynamic SQL by pass a parameter map to it:
 
 ```
-val params = mapOf("nick_name" to "Joe Mark S","age" to 121)
-val search_user = sql.build("find user by conditions",params)
+val params = mapOf("startTime" to "2017-12-13", "status" to "CLOSED", "searchKey" to "ABC123")
+val sql = get_order_list(params)
 ```
 
-the above codes generates a SQL like this:
+The generated SQL will like this:
+
 ```
-select id,name,nick_name,email,avatar,age,status,gender from `user`
-where 1=1
-and nick_name like :nick_name
-and status = 1
+SELECT
+    o.id                             AS id,
+    o.source_id                      AS sourceId,
+    o.batch_number                   AS batchNumber,
+FROM `order` o
+WHERE 1 = 1
+AND o.buyer_id = :userId
+AND o.status = :status
+AND o.order_number = :orderNumber
+ORDER BY o.create_time DESC
 ```
-
-## the background idea
-the project use kotlin scripting language (.kts file) as the SQL configuration file.
-
-when project starting, a ```SqlScriptLoader``` will loading all ".kts" file, and then use ```ScriptEngineManager``` to parse and evaluate them one by one.
-
-during evaluating the ```.kts``` file, the SQLs will be translated into ```Spring EL``` template, and when we call ```sql.build``` method, the program will use ```spring-el``` parser to parse the SQL template into target SQL text.
 
 ## license 
 Apache 2.0
